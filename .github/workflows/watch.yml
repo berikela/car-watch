@@ -1,0 +1,52 @@
+name: Watch myauto.ge
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # every 10 minutes (GitHub may run it a few minutes late)
+  workflow_dispatch:
+    inputs:
+      test_email:
+        description: "Send a test email with the 3 newest matches"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write   # to save seen.json back to the repository
+
+concurrency:
+  group: watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      EMAIL_USER: ${{ secrets.EMAIL_USER }}
+      EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+      EMAIL_TO: ${{ secrets.EMAIL_TO }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Send test email
+        if: ${{ inputs.test_email }}
+        run: python watcher.py --test-email
+
+      - name: Check for new listings
+        if: ${{ !inputs.test_email }}
+        run: python watcher.py
+
+      - name: Remember seen listings
+        if: ${{ !inputs.test_email }}
+        run: |
+          git add seen.json
+          if ! git diff --cached --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "Update seen listings"
+            git push
+          fi

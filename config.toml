@@ -1,0 +1,39 @@
+# What to watch for on myauto.ge.
+# Each [[search]] block is one saved search. Add as many blocks as you like.
+# Lines starting with # are ignored - remove the # to switch a filter on.
+
+[[search]]
+name = "Mitsubishi Pajero / Montero"
+manufacturer = "Mitsubishi"
+# Exact model names as shown on myauto.ge. "Pajero" does NOT include
+# "Pajero Sport", "Pajero IO", "Pajero Mini", "Pajero Junior" or "Montero Sport" -
+# add those to the list if you want them. Use [] for every model of the manufacturer.
+models = ["Pajero", "Montero"]
+
+# ---- optional filters (same ones as the filter panel on the website) ----
+# price_from = 3000
+# price_to   = 12000
+# currency   = "USD"                 # USD, GEL or EUR (applies to price_from / price_to)
+# year_from  = 2000
+# year_to    = 2012
+# mileage_from = 0                   # km
+# mileage_to   = 250000              # km
+# engine_from  = 2.5                 # litres
+# engine_to    = 3.5                 # litres
+# fuel     = ["Diesel"]              # Petrol, Diesel, Electric, Hybrid, Plug-in Hybrid, LPG, CNG, Hydrogen
+# gearbox  = ["Automatic"]           # Manual, Automatic, Tiptronic, Variator
+# drive    = ["4x4"]                 # Front, Rear, 4x4
+# body     = ["Jeep"]                # Sedan, Jeep, Coupe, Hatchback, Universal, Cabriolet, Pickup, Minivan, Limousine, Crossover
+# color    = ["Black", "White"]      # White, Black, Silver, Grey, Red, Blue, Yellow, Green, Orange, Golden, Violet, Pink, Beige, Carnelian red, Sky blue, Brown
+# location = ["Tbilisi", "Rustavi"]  # Tbilisi, Kutaisi, Batumi, Poti, Rustavi, Rustavi Car Market, Caucasus Auto Market, Gori, Zugdidi, Telavi, Kobuleti, USA, Germany, Japan, Europe
+# customs_cleared = true             # true = only customs-cleared cars, false = only not cleared
+# steering_wheel  = "left"           # left or right
+# keyword = "turbo"                  # text search in the listing
+
+# Example of a second search:
+# [[search]]
+# name = "Toyota Land Cruiser Prado, diesel"
+# manufacturer = "Toyota"
+# models = ["Land Cruiser Prado"]
+# fuel = ["Diesel"]
+# price_to = 20000
