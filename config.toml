@@ -3,12 +3,16 @@
 # Lines starting with # are ignored - remove the # to switch a filter on.
 
 [[search]]
-name = "Mitsubishi Pajero / Montero"
+name = "Mitsubishi Pajero / Montero 3.8"
 manufacturer = "Mitsubishi"
 # Exact model names as shown on myauto.ge. "Pajero" does NOT include
 # "Pajero Sport", "Pajero IO", "Pajero Mini", "Pajero Junior" or "Montero Sport" -
 # add those to the list if you want them. Use [] for every model of the manufacturer.
 models = ["Pajero", "Montero"]
+
+# Engine size in litres. Same number in both = exactly that engine.
+engine_from = 3.8
+engine_to   = 3.8
 
 # ---- optional filters (same ones as the filter panel on the website) ----
 # price_from = 3000
@@ -18,8 +22,6 @@ models = ["Pajero", "Montero"]
 # year_to    = 2012
 # mileage_from = 0                   # km
 # mileage_to   = 250000              # km
-# engine_from  = 2.5                 # litres
-# engine_to    = 3.5                 # litres
 # fuel     = ["Diesel"]              # Petrol, Diesel, Electric, Hybrid, Plug-in Hybrid, LPG, CNG, Hydrogen
 # gearbox  = ["Automatic"]           # Manual, Automatic, Tiptronic, Variator
 # drive    = ["4x4"]                 # Front, Rear, 4x4
@@ -29,6 +31,14 @@ models = ["Pajero", "Montero"]
 # customs_cleared = true             # true = only customs-cleared cars, false = only not cleared
 # steering_wheel  = "left"           # left or right
 # keyword = "turbo"                  # text search in the listing
+
+# Equipment the car must have (all of them). Sellers often skip these checkboxes,
+# so every feature you require can hide cars that actually have it.
+# features = ["Sunroof", "Heated seats"]
+#   Sunroof, Air conditioning, Climate control, Heated seats, Navigation,
+#   Rear camera, Parking sensors, Alloy wheels, ABS, ESP, Electric windows,
+#   Central locking, Alarm, On-board computer, Power steering, Turbo,
+#   Third row seats, Start-stop, Technical inspection
 
 # Example of a second search:
 # [[search]]

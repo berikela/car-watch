@@ -1,11 +1,15 @@
-"""Watch myauto.ge for newly listed cars and email about them.
+"""Watch myauto.ge for newly listed cars and send a notification about them.
 
 Searches are defined in config.toml. Listings already seen are remembered in
 seen.json, so each car is only reported once.
 
-    python watcher.py               check for new listings and email them
-    python watcher.py --dry-run     print what would be emailed, change nothing
-    python watcher.py --test-email  email the 3 newest matches to test the setup
+    python watcher.py               check for new listings and send a notification
+    python watcher.py --dry-run     print what would be sent, change nothing
+    python watcher.py --test-email  send a test notification with the 3 newest matches
+
+The notification is an email sent through Gmail when EMAIL_USER and EMAIL_PASSWORD
+are set. Otherwise, inside GitHub Actions, it is a GitHub issue, which GitHub emails
+to the repository owner.
 """
 
 import argparse
@@ -35,7 +39,7 @@ HEADERS = {
     "Origin": "https://www.myauto.ge",
     "Referer": "https://www.myauto.ge/",
 }
-MAX_PAGES = 10          # 30 listings per page, newest first
+MAX_PAGES = 5           # 30 listings per page, newest first; myauto.ge wants a login past page 5
 MAX_SEEN_PER_SEARCH = 5000
 
 # IDs used by the myauto.ge filters.
@@ -53,6 +57,16 @@ LOCATION = {"tbilisi": 2, "kutaisi": 3, "batumi": 4, "poti": 7, "telavi": 8, "zu
             "gori": 13, "rustavi": 15, "rustavi car market": 30, "kobuleti": 41,
             "caucasus auto market": 113, "germany": 19, "usa": 21, "japan": 22, "europe": 33}
 WHEEL = {"left": 0, "right": 1}
+# Equipment names for the "features" filter -> field in a myauto.ge listing.
+FEATURES = {"sunroof": "hatch", "air conditioning": "conditioner",
+            "climate control": "climat_control", "heated seats": "chair_warming",
+            "navigation": "nav_system", "rear camera": "back_camera",
+            "parking sensors": "obstacle_indicator", "alloy wheels": "disks", "abs": "abs",
+            "esp": "esd", "electric windows": "el_windows", "central locking": "central_lock",
+            "alarm": "alarm", "on-board computer": "board_comp",
+            "power steering": "hydraulics", "turbo": "has_turbo",
+            "third row seats": "has_third_row_seats", "start-stop": "start_stop",
+            "technical inspection": "tech_inspection"}
 
 # config key -> (API parameter, name->id table)
 LIST_FILTERS = {
@@ -69,11 +83,13 @@ NUMBER_FILTERS = {
     "mileage_from": "MileageFrom", "mileage_to": "MileageTo",
 }
 KNOWN_KEYS = {"name", "manufacturer", "models", "currency", "engine_from", "engine_to",
-              "customs_cleared", "steering_wheel", "keyword", "extra",
+              "customs_cleared", "steering_wheel", "keyword", "features", "extra",
               *LIST_FILTERS, *NUMBER_FILTERS}
 
 ID_TO_NAME = {key: {v: k.title().replace("4X4", "4x4") for k, v in table.items()}
               for key, (_, table) in LIST_FILTERS.items()}
+
+NOTHING_YET = "No cars match your searches right now. You will be notified when one is listed."
 
 
 class ConfigError(Exception):
@@ -162,6 +178,13 @@ def build_params(search):
     return params
 
 
+def feature_fields(search):
+    """Listing fields that must be true for the search's "features" filter."""
+    features = search.get("features", [])
+    features = features if isinstance(features, list) else [features]
+    return sorted(lookup(str(f), FEATURES, "feature") for f in features)
+
+
 def fetch_listings(params):
     listings = []
     for page in range(1, MAX_PAGES + 1):
@@ -174,7 +197,7 @@ def fetch_listings(params):
 
 
 def describe(car):
-    """Plain-data summary of a listing, shared by the text and HTML emails."""
+    """Plain-data summary of a listing, shared by every notification format."""
     car_id = car["car_id"]
     title = f'{car.get("man_name", "")} {car.get("model_name", "")} {car.get("car_model") or ""}'
     price = f'${car["price_usd"]:,.0f}' if car.get("price_usd") else "Price negotiable"
@@ -198,16 +221,35 @@ def describe(car):
     }
 
 
-def build_email(found):
-    """found: list of (search name, [car, ...])."""
+# The builders below take found: a list of (search name, [car, ...]).
+# An empty list produces the "notifications work" test message.
+
+def subject_for(found):
     total = sum(len(cars) for _, cars in found)
-    text, rows = [], []
+    if total == 0:
+        return "myauto.ge watcher test: notifications work"
+    if total == 1:
+        d = describe(found[0][1][0])
+        return f'New on myauto.ge: {d["title"]} - {d["price"]}'
+    return f"{total} new cars on myauto.ge"
+
+
+def build_text(found):
+    lines = [] if found else [NOTHING_YET]
     for name, cars in found:
-        text.append(f"== {name} ==")
+        lines.append(f"== {name} ==")
+        for car in cars:
+            d = describe(car)
+            lines.append(f'{d["title"]} - {d["price"]}\n{d["details"]}\n{d["url"]}\n')
+    return "\n".join(lines)
+
+
+def build_html(found):
+    rows = [] if found else [f"<p>{NOTHING_YET}</p>"]
+    for name, cars in found:
         rows.append(f'<h2 style="font-family:sans-serif">{html.escape(name)}</h2>')
         for car in cars:
             d = describe(car)
-            text.append(f'{d["title"]} - {d["price"]}\n{d["details"]}\n{d["url"]}\n')
             photo = (f'<a href="{d["url"]}"><img src="{html.escape(d["photo"])}" width="220" '
                      f'style="border-radius:6px" alt=""></a>') if d["photo"] else ""
             rows.append(
@@ -219,37 +261,69 @@ def build_email(found):
                 f'<span style="font-size:16px">{html.escape(d["price"])}</span><br>'
                 f'<span style="color:#555">{html.escape(d["details"])}</span>'
                 '</td></tr></table>')
+    return "\n".join(rows)
 
+
+def build_markdown(found):
+    lines = [] if found else [NOTHING_YET]
+    for name, cars in found:
+        lines.append(f"## {name}\n")
+        for car in cars:
+            d = describe(car)
+            lines.append(f'### [{d["title"]}]({d["url"]}) - {d["price"]}\n\n{d["details"]}\n')
+            if d["photo"]:
+                lines.append(f'[![photo]({d["photo"]})]({d["url"]})\n')
+    return "\n".join(lines)
+
+
+def send_email(found):
+    user = os.environ["EMAIL_USER"]
     message = EmailMessage()
-    if total == 1:
-        d = describe(found[0][1][0])
-        message["Subject"] = f'New on myauto.ge: {d["title"]} - {d["price"]}'
-    else:
-        message["Subject"] = f"{total} new cars on myauto.ge"
-    message.set_content("\n".join(text))
-    message.add_alternative("\n".join(rows), subtype="html")
-    return message
-
-
-def send_email(message):
-    user = os.environ.get("EMAIL_USER")
-    password = os.environ.get("EMAIL_PASSWORD")
-    if not user or not password:
-        raise RuntimeError("EMAIL_USER and EMAIL_PASSWORD must be set to send email")
+    message["Subject"] = subject_for(found)
     message["From"] = user
     message["To"] = os.environ.get("EMAIL_TO") or user
+    message.set_content(build_text(found))
+    message.add_alternative(build_html(found), subtype="html")
     host = os.environ.get("SMTP_HOST") or "smtp.gmail.com"
     with smtplib.SMTP_SSL(host, 465, timeout=30) as smtp:
-        smtp.login(user, password.replace(" ", ""))
+        smtp.login(user, os.environ["EMAIL_PASSWORD"].replace(" ", ""))
         smtp.send_message(message)
+
+
+def open_github_issue(found):
+    """Open an issue in this repository; GitHub then emails it to the repository owner."""
+    body = json.dumps({"title": subject_for(found), "body": build_markdown(found)}).encode()
+    request = urllib.request.Request(
+        f'https://api.github.com/repos/{os.environ["GITHUB_REPOSITORY"]}/issues',
+        data=body, method="POST",
+        headers={"Authorization": f'Bearer {os.environ["GITHUB_TOKEN"]}',
+                 "Accept": "application/vnd.github+json",
+                 "User-Agent": "myauto-watcher"})
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return json.loads(response.read())["html_url"]
+    except urllib.error.URLError as error:
+        raise RuntimeError(f"Could not open a GitHub issue: {error}") from None
+
+
+def notify(found):
+    """Email directly if EMAIL_USER / EMAIL_PASSWORD are set, otherwise via a GitHub issue."""
+    if os.environ.get("EMAIL_USER") and os.environ.get("EMAIL_PASSWORD"):
+        send_email(found)
+        print(f"Email sent: {subject_for(found)}")
+    elif os.environ.get("GITHUB_TOKEN") and os.environ.get("GITHUB_REPOSITORY"):
+        print(f"GitHub issue opened: {open_github_issue(found)}")
+    else:
+        raise RuntimeError("No way to notify: set EMAIL_USER and EMAIL_PASSWORD, "
+                           "or run inside GitHub Actions")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--dry-run", action="store_true",
-                        help="print new listings; do not email or save state")
+                        help="print new listings; do not notify or save state")
     parser.add_argument("--test-email", action="store_true",
-                        help="email the 3 newest matches of each search; do not save state")
+                        help="send a test notification with the 3 newest matches; do not save state")
     args = parser.parse_args()
 
     searches = tomllib.loads(CONFIG_FILE.read_text(encoding="utf-8")).get("search", [])
@@ -261,10 +335,12 @@ def main():
     for search in searches:
         name = search.get("name") or search.get("manufacturer", "search")
         params = build_params(search)
+        required = feature_fields(search)
         # Keyed by the filters, so editing a search starts it fresh instead of
         # emailing every car that matches the new filters.
-        key = urllib.parse.urlencode(sorted(params.items()))
-        listings = fetch_listings(params)
+        key = urllib.parse.urlencode(sorted(params.items()) + [("features", f) for f in required])
+        listings = [car for car in fetch_listings(params)
+                    if all(car.get(field) for field in required)]
         ids = [car["car_id"] for car in listings]
 
         if args.test_email:
@@ -281,17 +357,12 @@ def main():
         if cars:
             found.append((name, cars))
 
-    if found:
-        message = build_email(found)
-        if args.dry_run:
-            print(message.get_body(("plain",)).get_content())
-        else:
-            send_email(message)
-            print(f'Email sent: {message["Subject"]}')
-    elif args.test_email:
-        raise RuntimeError("No listings match the searches, so there is nothing to email")
+    if args.dry_run:
+        print(build_text(found) if found else "Nothing new.")
+    elif found or args.test_email:
+        notify(found)
 
-    # Saved only after the email went out, so a failed send is retried next run.
+    # Saved only after the notification went out, so a failed one is retried next run.
     if not args.dry_run and not args.test_email:
         STATE_FILE.write_text(json.dumps(new_state, indent=1) + "\n", encoding="utf-8")
 
