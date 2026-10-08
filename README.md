@@ -20,8 +20,9 @@ no server needed.
 3. **Test it**: repository → Actions → "Watch myauto.ge" → Run workflow → tick
    "Send a test notification" → Run. You should get an email within a minute or two.
 
-After that it runs by itself. The first normal run only remembers the cars that are already
-listed; from then on you get a notification for each new one.
+After that it runs by itself. The first normal run remembers the cars that are already
+listed and notifies you only about those listed in the last 24 hours; from then on you get
+a notification for each new one.
 
 ### Simple way: GitHub emails you (no password, no 2-step verification)
 
@@ -50,7 +51,8 @@ When these secrets exist the watcher emails directly and opens no issues.
 
 Edit `config.toml` (you can do it directly on github.com with the pencil button) and commit.
 All available filters are listed there as comments. When you change a search, the next run
-remembers the current matches silently and alerts only for cars listed after that.
+remembers the current matches and alerts only for those listed in the last 24 hours, then
+for every car listed after that.
 
 ## Running on your own computer
 

@@ -2,7 +2,9 @@ name: Watch myauto.ge
 
 on:
   schedule:
-    - cron: "*/10 * * * *"   # every 10 minutes (GitHub may run it a few minutes late)
+    # Every 10 minutes, off the busy :00 mark. GitHub runs schedules late and skips
+    # some when it is busy, so real gaps can be much longer.
+    - cron: "7-57/10 * * * *"
   workflow_dispatch:
     inputs:
       test_email:

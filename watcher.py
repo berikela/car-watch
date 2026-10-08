@@ -23,6 +23,7 @@ import tomllib
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from pathlib import Path
 
@@ -41,6 +42,9 @@ HEADERS = {
 }
 MAX_PAGES = 5           # 30 listings per page, newest first; myauto.ge wants a login past page 5
 MAX_SEEN_PER_SEARCH = 5000
+# On the first run of a search, cars listed this recently still count as new.
+FIRST_RUN_WINDOW = timedelta(hours=24)
+TBILISI = timezone(timedelta(hours=4))  # myauto.ge dates are in Tbilisi time
 
 # IDs used by the myauto.ge filters.
 CURRENCY = {"usd": 1, "eur": 2, "gel": 3}
@@ -196,6 +200,15 @@ def fetch_listings(params):
     return listings
 
 
+def listed_recently(car):
+    """True if the listing was placed (or renewed) within FIRST_RUN_WINDOW."""
+    try:
+        placed = datetime.strptime(car["order_date"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=TBILISI)
+    except (KeyError, TypeError, ValueError):
+        return False
+    return datetime.now(TBILISI) - placed < FIRST_RUN_WINDOW
+
+
 def describe(car):
     """Plain-data summary of a listing, shared by every notification format."""
     car_id = car["car_id"]
@@ -349,7 +362,9 @@ def main():
             seen = set(state[key])
             cars = [car for car in listings if car["car_id"] not in seen]
         else:
-            cars = []  # first run of this search: remember what is already there
+            # First run of this search: remember what is already there, but still
+            # report cars listed in the last day - the first run can come hours late.
+            cars = [car for car in listings if listed_recently(car)]
             print(f"[{name}] first run, remembering {len(ids)} existing listings")
         new_state[key] = sorted(set(state.get(key, [])) | set(ids))[-MAX_SEEN_PER_SEARCH:]
 
